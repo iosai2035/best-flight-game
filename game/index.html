@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kestrel Ridge — a 3D bush-plane flight game</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1622;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #hud { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(6,14,24,0.25) 0%, rgba(6,14,24,0.62) 100%);
+    color: #eef6fb; z-index: 5; }
+  .hidden { display: none !important; }
+  .card { max-width: 640px; width: calc(100% - 48px); padding: 34px 38px 30px; text-align: center;
+    background: rgba(8, 20, 32, 0.78); border: 1px solid rgba(127, 231, 255, 0.4);
+    border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+  .kicker { letter-spacing: 0.35em; font-size: 12px; color: #7fe7ff; font-weight: 700; }
+  h1 { margin: 8px 0 6px; font-size: 52px; line-height: 1; letter-spacing: 0.04em; font-weight: 800; }
+  h1 .ridge { color: #ffc21c; }
+  .sub { margin: 0 0 20px; font-size: 15px; line-height: 1.55; color: #c9dde9; }
+  .missions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+  .mission { padding: 14px 10px; border-radius: 10px; border: 1px solid rgba(127,231,255,0.35);
+    background: rgba(127,231,255,0.08); color: #eef6fb; cursor: pointer; text-align: center; }
+  .mission:hover { background: rgba(127,231,255,0.22); border-color: #7fe7ff; }
+  .mission b { display: block; font-size: 15px; margin-bottom: 4px; }
+  .mission span { font-size: 12px; color: #b9d2de; line-height: 1.4; display: block; }
+  .mission .key { display: inline-block; margin-top: 7px; padding: 1px 8px; border: 1px solid #7fe7ff;
+    border-radius: 5px; font-size: 11px; color: #7fe7ff; font-weight: 700; }
+  .controls { font-size: 12.5px; line-height: 1.9; color: #a9c4d2; margin-bottom: 14px; }
+  .controls b { color: #eef6fb; }
+  #menu-best { font-size: 13px; color: #ffc21c; font-weight: 600; }
+  .btn { display: inline-block; padding: 11px 26px; border-radius: 9px; border: none; cursor: pointer;
+    background: #ffc21c; color: #201400; font-weight: 800; font-size: 15px; }
+  .btn:hover { background: #ffd34d; }
+  .btn.ghost { background: transparent; border: 1px solid rgba(238,246,251,0.5); color: #eef6fb; margin-left: 10px; }
+  #crash h1 { color: #ff5a4e; font-size: 42px; }
+  #pause .card { padding: 22px 30px; }
+  #pause h1 { font-size: 30px; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="scene" aria-label="Kestrel Ridge: fly a bush plane over a mountain valley"></canvas>
+<canvas id="hud" aria-hidden="true"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+
+<div id="menu" class="overlay">
+  <div class="card">
+    <div class="kicker">A BUSH-PLANE FLIGHT GAME</div>
+    <h1 id="menu-title">KESTREL <span class="ridge">RIDGE</span></h1>
+    <p class="sub">A light bush plane, a mountain valley, a river and a grass strip.
+      Thread the glowing rings, grease a landing on the runway, or just fly
+      the valley until the fuel runs low. Watch the stall — the wing quits
+      past 19&deg; and the nose drops.</p>
+    <div class="missions">
+      <button class="mission" id="btn-ring"><b>Ring Run</b><span>9 glowing rings down the valley against the clock</span><span class="key">PRESS 1</span></button>
+      <button class="mission" id="btn-landing"><b>Valley Landing</b><span>Put it down on the runway: speed, sink, centreline</span><span class="key">PRESS 2</span></button>
+      <button class="mission" id="btn-free"><b>Free Flight</b><span>Explore the valley, thread gold fuel rings</span><span class="key">PRESS 3</span></button>
+    </div>
+    <p class="controls">
+      <b>W/S</b> pitch &nbsp; <b>A/D</b> roll &nbsp; <b>Q/E</b> rudder &nbsp; <b>Shift/Ctrl</b> throttle &nbsp; <b>Space</b> airbrake<br>
+      <b>Drag mouse</b> steer &nbsp; <b>C</b> chase / cockpit &nbsp; <b>R</b> restart &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute &nbsp; <b>Esc</b> menu
+    </p>
+    <p id="menu-best"></p>
+  </div>
+</div>
+
+<div id="crash" class="overlay hidden">
+  <div class="card">
+    <h1>CRASHED</h1>
+    <p class="sub" id="crash-text"></p>
+    <p class="sub" id="crash-score"></p>
+    <button class="btn" id="btn-crash-retry">Fly again (R)</button>
+    <button class="btn ghost" id="btn-crash-menu">Menu</button>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="card">
+    <h1>PAUSED</h1>
+    <p class="sub">Press P to keep flying, or R to restart the mission.</p>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
